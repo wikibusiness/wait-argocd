@@ -16359,6 +16359,8 @@ const run = async () => {
                 { headers: { Authorization: `Bearer ${tokenData.token}` } }
             );
 
+            console.log(dataApplication);
+
             if (dataApplication.status.health.status === 'Healthy' && dataApplication.status.sync.status === 'Synced') {
                 console.log(`Application ${APPLICATION_NAME} is healthy.`)
                 break;
