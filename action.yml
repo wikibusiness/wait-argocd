@@ -1,6 +1,14 @@
 name: 'wait-argocd'
 description: 'Sanitize a string for kubernetes names'
 inputs:
+  argo_endpoint:
+    description: 'Argocd endpoint'
+    required: true
+    default: ''
+  argo_user:
+    description: 'Argocd user'
+    required: true
+    default: ''
   argo_password:
     description: 'Argocd password'
     required: true
@@ -13,6 +21,10 @@ inputs:
     description: 'Max retries'
     required: true
     default: '10'
+  wait_ms:
+    description: 'Max retries'
+    required: true
+    default: '5000'
     
 runs:
   using: 'node16'
