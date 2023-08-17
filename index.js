@@ -39,7 +39,12 @@ const run = async () => {
             console.log(`Application ${APPLICATION_NAME} is not healthy. Status is ${dataApplication.status.health.status}`)
             withRefresh = ''
             index++;
-            waitForSomeMs(WAIT_MS)
+            await waitForSomeMs(WAIT_MS)
+
+            if (index >= MAX_RETRIES) {
+                core.setFailed(`Application ${APPLICATION_NAME} is not healthy after ${MAX_RETRIES} retries.`)
+                return
+            }
         }
 
     } catch (error) {
