@@ -31,12 +31,12 @@ const run = async () => {
                 { headers: { Authorization: `Bearer ${tokenData.token}` } }
             );
 
-            if (dataApplication.status.health.status === 'Healthy') {
+            if (dataApplication.status.health.status === 'Healthy' && dataApplication.status.sync.status === 'Synced') {
                 console.log(`Application ${APPLICATION_NAME} is healthy.`)
                 break;
             }
 
-            console.log(`Application ${APPLICATION_NAME} is not healthy. Status is ${dataApplication.status.health.status}`)
+            console.log(`Application ${APPLICATION_NAME} is not healthy. Status is ${dataApplication.status.health.status}. Sync status is ${dataApplication.status.sync.status}`)
             withRefresh = ''
             index++;
             await waitForSomeMs(WAIT_MS)
