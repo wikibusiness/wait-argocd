@@ -9,8 +9,7 @@ const waitForSomeMs = (ms) => {
   
 const run = async () => {
     try {
-        // `who-to-greet` input defined in action metadata file
-        const ARGO_URL = core.getInput('argo_url');
+        const ARGO_ENDPOINT = core.getInput('argo_endpoint');
         const ARGO_USER = core.getInput('argo_user');
         const ARGO_PASSWORD = core.getInput('argo_password');
         const APPLICATION_NAME = core.getInput('application_name');
@@ -19,7 +18,7 @@ const run = async () => {
 
 
         const { data: tokenData } = await axios.post(
-            `${ARGO_URL}/api/v1/session`,
+            `${ARGO_ENDPOINT}/api/v1/session`,
             { username: ARGO_USER, password: ARGO_PASSWORD }
         );
 
@@ -28,7 +27,7 @@ const run = async () => {
         while (index < MAX_RETRIES) {
             console.log(`Try ${index}`)
             const { data: dataApplication } = await axios.get(
-                `${ARGO_URL}/api/v1/applications/${APPLICATION_NAME}${withRefresh}`,
+                `${ARGO_ENDPOINT}/api/v1/applications/${APPLICATION_NAME}${withRefresh}`,
                 { headers: { Authorization: `Bearer ${tokenData.token}` } }
             );
 
