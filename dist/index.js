@@ -16330,166 +16330,45 @@ const core = __nccwpck_require__(3011);
 const github = __nccwpck_require__(7811);
 const axios = __nccwpck_require__(107)
 
+const waitForSomeMs = (ms) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
+};
+
+  
 const run = async () => {
     try {
         // `who-to-greet` input defined in action metadata file
         const ARGO_PASSWORD = core.getInput('argo_password');
-        const EXCLUDE_USERS = core.getInput('exclude_users');
-        const RABBITMQ_PASSWORD = core.getInput('rabbitmq_password');
-        const ELASTICSEARCH_URL = core.getInput('elasticsearch_url');
-        const CLICKHOUSE_URL = core.getInput('clickhouse_url');
+        const APPLICATION_NAME = core.getInput('application_name');
+        const MAX_RETRIES = parseInt(core.getInput('max_retries'));
+        const WAIT_MS = parseInt(core.getInput('wait_ms'));
 
 
         const { data: tokenData } = await axios.post(
             'https://argo.anchor.io/api/v1/session',
             { username: 'admin', password: ARGO_PASSWORD }
         );
-        const { data: dataApplications } = await axios.get(
-            'https://argo.anchor.io/api/v1/applications',
-            { headers: { Authorization: `Bearer ${tokenData.token}` } }
-        );
 
-        const activeProjects = [];
-
-        dataApplications.items.forEach(application => {
-            const project = application.spec.project;
-            if (project === 'app-staging') {
-                let projectName = application.metadata.name;
-                if (projectName.indexOf('frontend-app-') === 0) {
-                    projectName = projectName.substring('frontend-app-'.length);
-                } else if (projectName.indexOf('frontend-') === 0) {
-                    projectName = projectName.substring('frontend-'.length);
-                }
-                activeProjects.push(projectName);
-            }
-            if (project === 'default' && application?.metadata?.annotations?.platforms) {
-                activeProjects.push(application.metadata.name.substring('platforms-'.length));
-            }
-        });
-
-        const excludeUsers = EXCLUDE_USERS.split(',');
-        excludeUsers.forEach(user => {
-            activeProjects.push(user);
-        });
-
-
-        const activeProjectsClickhouse = activeProjects.map(p => p.replaceAll(/-/g, '_'));
-        console.log('activeProjects', activeProjects);
-
-
-
-
-        /**
-         * ELASTICSEARCH
-         */
-        console.log("Doing Elasticsearch...")
-        const result = await axios.get(`${ELASTICSEARCH_URL}/_cat/indices?format=json`)
-        for (const index of result.data) {
-            const indexName = index.index;
-            const isActive = activeProjects.find(p => indexName.indexOf(p) === 0);
-            if (indexName.indexOf("tttt-") > -1 || (indexName.indexOf('.') === -1 && !isActive)) {
-                console.log("Deleting", indexName)
-                try {
-                    await axios.delete(`${ELASTICSEARCH_URL}/${indexName}`)
-                } catch (e) {
-                    console.log(e)
-                }
-                
-            }
-        }
-        console.log("Done doing Elasticsearch.");
-
-        /**
-         * ACTIVE QUEUES
-         */
-
-        console.log("Doing RabbitMQ...")
-
-        const toDeleteQueues = [];
-
-        const { data: dataQueues } = await axios.get(
-            `https://root:${RABBITMQ_PASSWORD}@rmq-staging.services.anchor.io/api/queues`
-        );
-
-        dataQueues.forEach(queue => {
-            const queueName = queue.name;
-            let env = queueName.split(':')[0];
-
-            if (queueName.indexOf('dlx:::') === 0) {
-                env = queueName.split('dlx:::')[1].split(':')[0];
-            }
-            if (!activeProjects.includes(env)) {
-                toDeleteQueues.push(queueName);
-            }
-        });
-
-        for (const queue of toDeleteQueues) {
-            console.log(`Deleting ${queue}...`);
-            await axios.delete(
-                `https://root:${RABBITMQ_PASSWORD}@rmq-staging.services.anchor.io/api/queues/%2F/${encodeURIComponent(
-                    queue
-                )}`
+        let index = 0;
+        let withRefresh = '?refresh=true'
+        while (index < MAX_RETRIES) {
+            console.log(`Try ${index}`)
+            const { data: dataApplication } = await axios.get(
+                `https://argo.anchor.io/api/v1/applications/${APPLICATION_NAME}${withRefresh}`,
+                { headers: { Authorization: `Bearer ${tokenData.token}` } }
             );
+
+            if (dataApplication.status.health.status === 'Healthy') {
+                console.log(`Application ${APPLICATION_NAME} is healthy.`)
+                break;
+            }
+
+            console.log(`Application ${APPLICATION_NAME} is not healthy. Status is ${dataApplication.status.health.status}`)
+            withRefresh = ''
+            index++;
+            waitForSomeMs(WAIT_MS)
         }
 
-        /**
-         * Active exchanges
-         */
-
-        const toDeleteExchanges = [];
-
-        const { data: dataExchanges } = await axios.get(
-            `https://root:${RABBITMQ_PASSWORD}@rmq-staging.services.anchor.io/api/exchanges`
-        );
-
-        dataExchanges.forEach(exchange => {
-            const exchangeName = exchange.name;
-            if (exchangeName.includes(':')) {
-                let env = exchangeName.split(':')[0];
-                if (env === 'dlx') {
-                    env = exchangeName.split('dlx:::')[1].split(':')[0];
-                }
-                if (env === 'delayed') {
-                    env = exchangeName.split('delayed:::')[1].split(':')[0];
-                }
-
-                if (!activeProjects.includes(env)) {
-                    toDeleteExchanges.push(exchangeName);
-                }
-            }
-        });
-
-        for (const exchange of toDeleteExchanges) {
-            console.log(`Deleting ${exchange}...`);
-            await axios.delete(
-                `https://root:${RABBITMQ_PASSWORD}@rmq-staging.services.anchor.io/api/exchanges/%2F/${encodeURIComponent(
-                    exchange
-                )}`
-            );
-        }
-
-        /**
-         * CLICKHOUSE
-         *  */
-        console.log("Doing Clickhouse...")
-        const { data: dataClickhouse } = await axios.get(
-            `${CLICKHOUSE_URL}/?query=SHOW%20DATABASES%20FORMAT%20JSON`
-        );
-        for (const database of dataClickhouse.data) {
-            const name = database.name;
-            if (name === "system" || name === "INFORMATION_SCHEMA" || name === "default" || name === "production") {
-                continue;
-            }
-            if (!activeProjectsClickhouse.includes(name)) {
-                console.log("Deleting database in clickhouse", name)
-                await axios.post(
-                    `${CLICKHOUSE_URL}/?query=DROP%20DATABASE%20${name}%20on%20cluster%20'{cluster}'`
-                );
-            }
-        }
-        console.log("Done doing Clickhouse.");
-
-        
     } catch (error) {
         core.setFailed(error.message);
     }
