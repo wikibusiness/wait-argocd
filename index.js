@@ -15,7 +15,8 @@ const run = async () => {
         const MAX_RETRIES = parseInt(core.getInput('max_retries'));
         const WAIT_MS = parseInt(core.getInput('wait_ms'));
 
-
+        console.log("Getting access token...")
+        console.log(`${ARGO_ENDPOINT}/api/v1/session`, { username: ARGO_USER, password: ARGO_PASSWORD })
         const { data: tokenData } = await axios.post(
             `${ARGO_ENDPOINT}/api/v1/session`,
             { username: ARGO_USER, password: ARGO_PASSWORD }
