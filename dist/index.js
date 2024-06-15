@@ -9445,6 +9445,12 @@ const run = async () => {
         }
 
     } catch (error) {
+        if (error.response) {
+            console.log("Error response");
+            console.log(error.response.data);
+            console.log(error.response.status);
+            console.log(error.response.headers);
+        }
         core.setFailed(error.message);
     }
 }
